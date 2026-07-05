@@ -1,0 +1,22 @@
+# Config & secrets
+config.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.part
+
+# Runtime data
+no_media.txt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
