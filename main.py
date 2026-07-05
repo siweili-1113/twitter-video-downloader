@@ -144,9 +144,25 @@ async def _fetch_tweet_info(url, tweet_id, headers, settings):
     return None, None, None
 
 
+def _split_urls(lines):
+    """Split multi‑link lines like '...https://a...https://b...' into individual links."""
+    results = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        parts = re.split(r'(?=https?://)', line)
+        for part in parts:
+            part = part.strip()
+            if part:
+                results.append(part)
+    return results
+
+
 async def process_urls(urls, save_path, settings):
-    unique_urls = list(dict.fromkeys([url.strip() for url in urls if url.strip()]))
-    print(f"Total links: {len(urls)}, after dedup: {len(unique_urls)}")
+    url_lines = _split_urls(urls)
+    unique_urls = list(dict.fromkeys([u.strip() for u in url_lines if u.strip()]))
+    print(f"Total links: {len(url_lines)}, after dedup: {len(unique_urls)}")
 
     api_sem = asyncio.Semaphore(settings.get('max_api_concurrent', 3))
     dl_sem = asyncio.Semaphore(settings.get('max_concurrent_requests', 8))
