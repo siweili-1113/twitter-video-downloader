@@ -290,11 +290,11 @@ async def _process_one_url(url, save_path, settings, headers, pbar,
                 async with dl_sem:
                     await asyncio.gather(*download_tasks, return_exceptions=True)
                 print(f"Download completed: {url}")
-                if url_file:
-                    async with _file_lock:
-                        _remove_url_from_file(url_file, url)
             else:
                 print(f"All files already exist, skip: {url}")
+            if url_file:
+                async with _file_lock:
+                    _remove_url_from_file(url_file, url)
 
     except Exception as e:
         print(f"Processing error [{url}]: {e}")
