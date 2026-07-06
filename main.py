@@ -159,7 +159,28 @@ def _split_urls(lines):
     return results
 
 
-async def process_urls(urls, save_path, settings):
+_file_lock = asyncio.Lock()
+
+
+def _remove_url_from_file(url_file, url):
+    """Remove one URL line from the links file."""
+    try:
+        with open(url_file, 'r', encoding='utf8') as f:
+            lines = f.readlines()
+        with open(url_file, 'w', encoding='utf8') as f:
+            removed = False
+            for line in lines:
+                stripped = line.strip()
+                if not removed and stripped == url:
+                    removed = True
+                    continue
+                if stripped:
+                    f.write(stripped + '\n')
+    except Exception as e:
+        print(f"Warning: Failed to update links file: {e}")
+
+
+async def process_urls(urls, save_path, settings, url_file=None):
     url_lines = _split_urls(urls)
     unique_urls = list(dict.fromkeys([u.strip() for u in url_lines if u.strip()]))
     print(f"Total links: {len(url_lines)}, after dedup: {len(unique_urls)}")
@@ -181,7 +202,7 @@ async def process_urls(urls, save_path, settings):
         for url in unique_urls:
             task = asyncio.create_task(
                 _process_one_url(url, save_path, settings, headers, pbar,
-                                 api_sem, dl_sem, api_delay)
+                                 api_sem, dl_sem, api_delay, url_file)
             )
             tasks.append(task)
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -190,7 +211,7 @@ async def process_urls(urls, save_path, settings):
 
 
 async def _process_one_url(url, save_path, settings, headers, pbar,
-                           api_sem, dl_sem, api_delay):
+                           api_sem, dl_sem, api_delay, url_file=None):
     try:
         tweet_id = get_tweet_id_safe(url)
         if tweet_id is None:
@@ -269,6 +290,9 @@ async def _process_one_url(url, save_path, settings, headers, pbar,
                 async with dl_sem:
                     await asyncio.gather(*download_tasks, return_exceptions=True)
                 print(f"Download completed: {url}")
+                if url_file:
+                    async with _file_lock:
+                        _remove_url_from_file(url_file, url)
             else:
                 print(f"All files already exist, skip: {url}")
 
@@ -358,6 +382,14 @@ if __name__ == '__main__':
 
     url_file = os.path.join(script_dir, settings['url_file'])
     with open(url_file, 'r', encoding='utf8') as f:
-        urls = f.readlines()
+        raw_lines = f.readlines()
 
-    asyncio.run(process_urls(urls, settings['save_path'], settings))
+    # Auto-split multi-link lines and rewrite file with one URL per line
+    urls = _split_urls(raw_lines)
+    if len(urls) != len(raw_lines):
+        with open(url_file, 'w', encoding='utf8') as f:
+            for u in urls:
+                f.write(u + '\n')
+        print(f"Auto-split: {len(raw_lines)} lines → {len(urls)} individual links.")
+
+    asyncio.run(process_urls(urls, settings['save_path'], settings, url_file))
