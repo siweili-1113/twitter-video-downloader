@@ -135,9 +135,14 @@ async def _fetch_tweet_info(url, tweet_id, headers, settings):
 
                 return user_name, tweet_time, media_list
 
+        except (httpx.HTTPError, OSError) as e:
+            attempt += 1
+            print(f"Network error ({attempt}/{max_retries}): {type(e).__name__}: {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(2 ** attempt)
         except Exception as e:
             attempt += 1
-            print(f"API request exception ({attempt}/{max_retries}): {e}")
+            print(f"Unexpected error ({attempt}/{max_retries}): {type(e).__name__}: {e}")
             if attempt < max_retries:
                 await asyncio.sleep(2 ** attempt)
 
@@ -227,9 +232,15 @@ async def _process_one_url(url, save_path, settings, headers, pbar,
         if not media_list:
             if user_name is None and tweet_time is None:
                 print(f"API fetch failed: {url}")
+                if url_file:
+                    async with _file_lock:
+                        _remove_url_from_file(url_file, url)
             else:
                 print("No media content in this tweet.")
                 _write_no_media(url)
+                if url_file:
+                    async with _file_lock:
+                        _remove_url_from_file(url_file, url)
             pbar.update(1)
             return
 
